@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>3日限定メモ</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .custom-bg {
+            background-color: #f0f8ff;
+        }
+        .custom-yellow {
+            background-color: #ffd700;
+        }
+        .custom-blue {
+            background-color: #1e90ff;
+        }
+        .custom-hover:hover {
+            background-color:  #ffd700;
+        }
+    </style>
+</head>
+<body class="custom-bg min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-3xl">
+        <h1 class="text-3xl font-bold text-blue-800 mb-8">3日限定メモ</h1>
+        
+        <div class="bg-yellow-100 rounded-lg shadow-lg p-6 mb-6 custom-hover">
+            <textarea 
+                id="newNote" 
+                placeholder="メモを入力..." 
+                class="w-full h-32 p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 bg-yellow-50"
+            ></textarea>
+            <div class="flex justify-between items-center">
+                <button 
+                    onclick="saveNote()" 
+                    class="custom-blue text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition duration-200"
+                >
+                    <i class="fas fa-save mr-2"></i>保存
+                </button>
+                <p id="charCount" class="text-blue-800">0 文字</p>
+            </div>
+        </div>
+
+        <div id="notesList"></div>
+    </div>
+
+    <script>
+        let editingId = null;
+
+        function updateCharCount() {
+            const input = document.getElementById('newNote');
+            const count = document.getElementById('charCount');
+            count.textContent = `${input.value.length} 文字`;
+        }
+
+        function saveNote() {
+            const input = document.getElementById('newNote');
+            const content = input.value.trim();
+            if (!content) return;
+
+            const notes = getNotes();
+            
+            if (editingId) {
+                const index = notes.findIndex(note => note.id === editingId);
+                if (index !== -1) {
+                    notes[index].content = content;
+                    notes[index].editedAt = new Date().toISOString();
+                }
+                editingId = null;
+            } else {
+                const note = {
+                    id: Date.now(),
+                    content: content,
+                    createdAt: new Date().toISOString(),
+                    editedAt: null
+                };
+                notes.push(note);
+            }
+
+            localStorage.setItem('notes', JSON.stringify(notes));
+            input.value = '';
+            updateCharCount();
+            displayNotes();
+        }
+
+        function editNote(id) {
+            const notes = getNotes();
+            const note = notes.find(note => note.id === id);
+            if (note) {
+                document.getElementById('newNote').value = note.content;
+                editingId = id;
+                updateCharCount();
+                document.getElementById('newNote').focus();
+            }
+        }
+
+        function getNotes() {
+            const notes = localStorage.getItem('notes');
+            return notes ? JSON.parse(notes) : [];
+        }
+
+        function deleteNote(id) {
+            if (!confirm('本当に削除しますか？')) return;
+            
+            let notes = getNotes();
+            notes = notes.filter(note => note.id !== id);
+            localStorage.setItem('notes', JSON.stringify(notes));
+            displayNotes();
+        }
+
+        function getTimeRemaining(createdAt) {
+            const created = new Date(createdAt);
+            const expires = new Date(created.getTime() + 3*24*60*60*1000);
+            const now = new Date();
+            const hours = Math.floor((expires - now) / (60*60*1000));
+            return `残り ${Math.max(0, hours)} 時間`;
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function displayNotes() {
+            const notesList = document.getElementById('notesList');
+            const notes = getNotes();
+            const threeDaysAgo = new Date(Date.now() - 3*24*60*60*1000);
+            
+            const validNotes = notes.filter(note => 
+                new Date(note.createdAt) > threeDaysAgo
+            ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+            if (validNotes.length !== notes.length) {
+                localStorage.setItem('notes', JSON.stringify(validNotes));
+            }
+
+            notesList.innerHTML = validNotes.map(note => `
+                <div class="bg-yellow-100 rounded-lg shadow-lg p-6 mb-4 hover:bg-yellow-200 transition duration-200">
+                    <div class="whitespace-pre-wrap mb-4 text-blue-900">${note.content}</div>
+                    <div class="flex justify-between items-center text-sm text-blue-800">
+                        <div>
+                            <div>作成: ${formatDate(note.createdAt)}</div>
+                            ${note.editedAt ? `<div>編集: ${formatDate(note.editedAt)}</div>` : ''}
+                            <div class="text-blue-600">${getTimeRemaining(note.createdAt)}</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button 
+                                onclick="editNote(${note.id})" 
+                                class="custom-blue text-white px-4 py-2 rounded hover:bg-blue-600 transition duration-200"
+                            >
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button 
+                                onclick="deleteNote(${note.id})" 
+                                class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition duration-200"
+                            >
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 文字数カウント機能の初期化
+        document.getElementById('newNote').addEventListener('input', updateCharCount);
+
+        // 初期表示
+        displayNotes();
+
+        // 1分ごとに期限切れチェック
+        setInterval(displayNotes, 60000);
+    </script>
+</body>
+</html>
